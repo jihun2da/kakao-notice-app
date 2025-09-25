@@ -67,28 +67,42 @@ if "reported_companies" not in st.session_state:
     st.session_state.reported_companies = []
 if "saved_data" not in st.session_state:
     st.session_state.saved_data = {}
+if "current_brand" not in st.session_state:
+    st.session_state.current_brand = ""
 
 # 날짜별 저장 함수
 def save_daily_data():
     today = datetime.datetime.now().strftime("%Y-%m-%d")
+    brand = st.session_state.current_brand or "미지정"
     data = {
+        "brand": brand,
         "entries": st.session_state.entries.copy(),
         "reported_companies": st.session_state.reported_companies.copy(),
         "timestamp": datetime.datetime.now().isoformat()
     }
-    st.session_state.saved_data[today] = data
-    return today
+    # 날짜와 브랜드명을 키로 사용
+    key = f"{today}_{brand}"
+    st.session_state.saved_data[key] = data
+    return key
 
 # 날짜별 데이터 로드 함수
-def load_daily_data(date):
-    if date in st.session_state.saved_data:
-        data = st.session_state.saved_data[date]
+def load_daily_data(key):
+    if key in st.session_state.saved_data:
+        data = st.session_state.saved_data[key]
         st.session_state.entries = data["entries"]
         st.session_state.reported_companies = data["reported_companies"]
+        st.session_state.current_brand = data.get("brand", "")
         return True
     return False
 
+# 브랜드명 입력
+st.subheader("브랜드 정보")
+brand_name = st.text_input("브랜드명", value=st.session_state.current_brand, placeholder="예: 나이키, 아디다스, 뉴발란스 등")
+if brand_name:
+    st.session_state.current_brand = brand_name
+
 # 입력 폼
+st.subheader("업체 정보 입력")
 with st.form("entry_form", clear_on_submit=True):
     col1, col2 = st.columns(2)
     using_company = col1.text_input("이용업체(중도매/직거래)", placeholder="예: 기린컴퍼니")
@@ -173,8 +187,11 @@ st.subheader("데이터 저장")
 col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("오늘 데이터 저장"):
-        save_date = save_daily_data()
-        st.success(f"데이터가 {save_date}에 저장되었습니다!")
+        if not st.session_state.current_brand:
+            st.warning("브랜드명을 입력해주세요!")
+        else:
+            save_key = save_daily_data()
+            st.success(f"데이터가 {save_key}에 저장되었습니다!")
 with col2:
     if st.button("현재 데이터 초기화"):
         st.session_state.entries.clear()
@@ -189,34 +206,55 @@ with col3:
 st.markdown("---")
 st.subheader("저장된 데이터 확인")
 
-# 저장된 날짜 목록 표시
+# 저장된 데이터 목록 표시
 if st.session_state.saved_data:
-    st.write("저장된 날짜 목록:")
-    saved_dates = sorted(st.session_state.saved_data.keys(), reverse=True)
+    st.write("저장된 데이터 목록:")
     
-    # 날짜 선택 드롭다운
-    selected_date = st.selectbox("확인할 날짜를 선택하세요:", saved_dates)
+    # 저장된 데이터를 날짜별로 그룹화하여 표시
+    saved_items = []
+    for key, data in st.session_state.saved_data.items():
+        date_part = key.split('_')[0]
+        brand_part = key.split('_', 1)[1] if '_' in key else "미지정"
+        saved_items.append({
+            'key': key,
+            'date': date_part,
+            'brand': brand_part,
+            'entries_count': len(data.get('entries', [])),
+            'reported_count': len(data.get('reported_companies', []))
+        })
     
-    if selected_date:
+    # 날짜순으로 정렬
+    saved_items.sort(key=lambda x: x['date'], reverse=True)
+    
+    # 데이터 선택 드롭다운
+    display_options = [f"{item['date']} - {item['brand']} (업체:{item['entries_count']}건, 신고완료:{item['reported_count']}건)" 
+                      for item in saved_items]
+    selected_index = st.selectbox("확인할 데이터를 선택하세요:", range(len(display_options)), 
+                                 format_func=lambda x: display_options[x])
+    
+    if selected_index is not None:
+        selected_item = saved_items[selected_index]
+        selected_key = selected_item['key']
+        
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("선택한 날짜 데이터 로드"):
-                if load_daily_data(selected_date):
-                    st.success(f"{selected_date} 데이터를 로드했습니다!")
+            if st.button("선택한 데이터 로드"):
+                if load_daily_data(selected_key):
+                    st.success(f"{selected_item['date']} - {selected_item['brand']} 데이터를 로드했습니다!")
                     st.rerun()
                 else:
                     st.error("데이터를 로드할 수 없습니다.")
         
         with col2:
-            if st.button("선택한 날짜 데이터 삭제"):
-                del st.session_state.saved_data[selected_date]
-                st.success(f"{selected_date} 데이터가 삭제되었습니다!")
+            if st.button("선택한 데이터 삭제"):
+                del st.session_state.saved_data[selected_key]
+                st.success(f"{selected_item['date']} - {selected_item['brand']} 데이터가 삭제되었습니다!")
                 st.rerun()
         
-        # 선택한 날짜의 데이터 미리보기
-        if selected_date in st.session_state.saved_data:
-            data = st.session_state.saved_data[selected_date]
-            st.write(f"**{selected_date} 저장된 데이터:**")
+        # 선택한 데이터의 미리보기
+        if selected_key in st.session_state.saved_data:
+            data = st.session_state.saved_data[selected_key]
+            st.write(f"**{selected_item['date']} - {selected_item['brand']} 저장된 데이터:**")
             
             if data["entries"]:
                 st.write("**일반 업체 정보:**")
@@ -255,7 +293,8 @@ st.markdown("""
 st.markdown("#### 메시지 텍스트(선택, 복사해서 함께 전송)")
 if st.session_state.entries:
     # 간단 메시지 빌드
-    lines = ["[신고 및 단속완료 요약]"]
+    brand_info = f"브랜드: {st.session_state.current_brand}" if st.session_state.current_brand else "브랜드: 미지정"
+    lines = [f"[신고 및 단속완료 요약 - {brand_info}]"]
     for i, e in enumerate(st.session_state.entries, start=1):
         lines.append(f"#{i} [{e.get('company_name','-')}]")
         lines.append(f" - 이용업체: {e.get('using_company','-')}")
