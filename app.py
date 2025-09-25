@@ -58,44 +58,57 @@ def render_a4(entries, dpi=300):
     body_font  = pick_font(38)
     meta_font  = pick_font(30)
 
+    # 상단 장식 테두리 그리기
+    border_thickness = 8
+    # 상단 테두리
+    draw.rectangle((0, 0, A4_W, border_thickness), fill=(0, 50, 100))
+    # 하단 테두리  
+    draw.rectangle((0, A4_H-border_thickness, A4_W, A4_H), fill=(0, 50, 100))
+    # 좌측 테두리
+    draw.rectangle((0, 0, border_thickness, A4_H), fill=(0, 50, 100))
+
     # 헤더
-    y = MARGIN
+    y = MARGIN + 20
     header = "신고 및 단속완료"
     # 중앙 정렬
     w = draw.textlength(header, font=title_font)
     draw.text(((A4_W - w)//2, y), header, font=title_font, fill=(0,0,0))
-    y += title_font.size + 18
+    y += title_font.size + 30
 
     # 메타
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     meta = f"생성일시: {now}   총 입력: {len(entries)}건"
     draw.text((MARGIN, y), meta, font=meta_font, fill=(90,90,90))
-    y += meta_font.size + 24
+    y += meta_font.size + 30
 
     # 구분선
     x = MARGIN
     box_w = A4_W - 2*MARGIN
     draw.rectangle((x, y, x+box_w, y+4), fill=(0,0,0))
-    y += 30
+    y += 40
 
     # 본문
     for idx, e in enumerate(entries, start=1):
+        # 배경 박스 그리기
+        box_y = y - 10
+        box_h = 200  # 각 항목의 높이
+        draw.rectangle((x-10, box_y, x+box_w+10, box_y+box_h), fill=(248, 249, 250), outline=(200, 200, 200), width=1)
+        
         draw.text((x, y), f"[#{idx}]", font=h2_font, fill=(0,0,0))
-        y += h2_font.size + 8
+        y += h2_font.size + 15
 
-        y = draw_text_block(draw, x, y, "이용중인 업체 확인된곳", wrap_text(e.get("confirmed")), h2_font, body_font)
-        y = draw_text_block(draw, x, y, "이용업체", wrap_text(e.get("using_company")), h2_font, body_font)
+        y = draw_text_block(draw, x, y, "이용업체(중도매/직거래)", wrap_text(e.get("using_company")), h2_font, body_font)
         y = draw_text_block(draw, x, y, "업체명", wrap_text(e.get("company_name")), h2_font, body_font)
-        y = draw_text_block(draw, x, y, "업체 판매처 URL", wrap_text(e.get("store_url")), h2_font, body_font)
-        y = draw_text_block(draw, x, y, "주문자명(주문 시 사용)", wrap_text(e.get("order_name")), h2_font, body_font)
-        y = draw_text_block(draw, x, y, "연락처", wrap_text(e.get("phone")), h2_font, body_font)
+        y = draw_text_block(draw, x, y, "주문시 사용하는 주문자명", wrap_text(e.get("order_name")), h2_font, body_font)
+        y = draw_text_block(draw, x, y, "전화번호", wrap_text(e.get("phone")), h2_font, body_font)
+        y = draw_text_block(draw, x, y, "신고완료된 업체명", wrap_text(e.get("reported_company")), h2_font, body_font)
 
         # 카드 구분선
-        y += 10
-        draw.rectangle((x, y, x+box_w, y+3), fill=(220,220,220))
-        y += 24
+        y += 20
+        draw.rectangle((x, y, x+box_w, y+2), fill=(220,220,220))
+        y += 30
 
-        # 한 장에 넘칠 것 같으면 중단(간단 버전; 다페이지는 아래 V2에서 안내)
+        # 한 장에 넘칠 것 같으면 중단
         if y > A4_H - (MARGIN + 100):
             break
 
@@ -128,14 +141,13 @@ if "entries" not in st.session_state:
 # 입력 폼
 with st.form("entry_form", clear_on_submit=True):
     col1, col2 = st.columns(2)
-    confirmed = col1.text_input("이용중인 업체 확인된곳", placeholder="예: 네이버 스마트스토어 / 쿠팡 등")
-    using_company = col2.text_input("이용업체", placeholder="예: 기린컴퍼니")
+    using_company = col1.text_input("이용업체(중도매/직거래)", placeholder="예: 기린컴퍼니")
+    company_name = col2.text_input("업체명", placeholder="예: ㈜예시상사")
 
-    company_name = col1.text_input("업체명", placeholder="예: ㈜예시상사")
-    store_url = col2.text_input("업체 판매처 URL", placeholder="https://...")
-
-    order_name = col1.text_input("주문 시 사용하는 주문자명", placeholder="예: 홍길동")
-    phone = col2.text_input("연락처", placeholder="010-0000-0000")
+    order_name = col1.text_input("주문시 사용하는 주문자명", placeholder="예: 홍길동")
+    phone = col2.text_input("전화번호", placeholder="010-0000-0000")
+    
+    reported_company = st.text_input("신고완료된 업체명", placeholder="예: ㈜신고완료업체")
 
     submitted = st.form_submit_button("추가 (최대 20건)")
     if submitted:
@@ -143,12 +155,11 @@ with st.form("entry_form", clear_on_submit=True):
             st.warning("최대 20건까지 입력 가능합니다.")
         else:
             st.session_state.entries.append({
-                "confirmed": confirmed,
                 "using_company": using_company,
                 "company_name": company_name,
-                "store_url": store_url,
                 "order_name": order_name,
                 "phone": phone,
+                "reported_company": reported_company,
             })
             st.success("추가 완료!")
 
@@ -156,7 +167,7 @@ with st.form("entry_form", clear_on_submit=True):
 st.subheader(f"입력 리스트 ({len(st.session_state.entries)}/{MAX_ITEMS})")
 if st.session_state.entries:
     df = pd.DataFrame(st.session_state.entries, columns=[
-        "confirmed","using_company","company_name","store_url","order_name","phone"
+        "using_company","company_name","order_name","phone","reported_company"
     ])
     st.dataframe(df, use_container_width=True)
 
@@ -188,7 +199,7 @@ if (gen_png or gen_pdf):
         st.warning("먼저 항목을 하나 이상 추가해 주세요.")
     else:
         img = render_a4(st.session_state.entries)
-        preview = img.copy().resize((int(A4_W/3), int(A4_H/3)))  # 미리보기용 축소
+        preview = img.copy().resize((int(A4_W/2), int(A4_H/2)))  # 미리보기용 확대
         if gen_png:
             png_bytes = pil_to_bytes(img, "PNG")
         if gen_pdf:
@@ -235,10 +246,10 @@ if st.session_state.entries:
     # 간단 메시지 빌드
     lines = ["[신고 및 단속완료 요약]"]
     for i, e in enumerate(st.session_state.entries, start=1):
-        lines.append(f"#{i} [{e.get('company_name','-')}] {e.get('confirmed','-')}")
+        lines.append(f"#{i} [{e.get('company_name','-')}]")
         lines.append(f" - 이용업체: {e.get('using_company','-')}")
-        lines.append(f" - URL: {e.get('store_url','-')}")
         lines.append(f" - 주문자명: {e.get('order_name','-')}, 연락처: {e.get('phone','-')}")
+        lines.append(f" - 신고완료업체: {e.get('reported_company','-')}")
     msg = "\n".join(lines)
     st.code(msg, language="text")
 else:
