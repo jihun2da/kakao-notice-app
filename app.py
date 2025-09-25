@@ -12,14 +12,18 @@ import pandas as pd
 # =========================
 st.set_page_config(page_title="신고 및 단속완료 - 자동 이미지 생성", page_icon="✅", layout="centered")
 
-A4_W, A4_H = 2480, 3508   # 300DPI 기준 A4 px
-MARGIN = 120
+A4_W, A4_H = 3508, 4961   # 300DPI 기준 A4 px (더 큰 해상도)
+MARGIN = 150
 MAX_ITEMS = 20
 
 # 폰트 탐색(우선순위: assets -> OS 공용 경로 -> 기본)
 FONT_CANDIDATES = [
     "assets/NanumGothic.ttf",
-    "C:/Windows/Fonts/malgun.ttf",  # Windows
+    "C:/Windows/Fonts/malgun.ttf",  # Windows 맑은 고딕
+    "C:/Windows/Fonts/gulim.ttc",   # Windows 굴림
+    "C:/Windows/Fonts/batang.ttc",  # Windows 바탕
+    "C:/Windows/Fonts/dotum.ttc",  # Windows 돋움
+    "C:/Windows/Fonts/NanumGothic.ttf",  # Windows 나눔고딕
     "/System/Library/Fonts/AppleSDGothicNeo.ttc",  # macOS
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"  # Linux(일반)
 ]
@@ -52,11 +56,11 @@ def render_a4(entries, dpi=300):
     img = Image.new("RGB", (A4_W, A4_H), "white")
     draw = ImageDraw.Draw(img)
 
-    # 폰트
-    title_font = pick_font(82)
-    h2_font    = pick_font(50)
-    body_font  = pick_font(38)
-    meta_font  = pick_font(30)
+    # 폰트 (더 큰 크기)
+    title_font = pick_font(120)
+    h2_font    = pick_font(70)
+    body_font  = pick_font(50)
+    meta_font  = pick_font(40)
 
     # 상단 장식 테두리 그리기
     border_thickness = 8
@@ -101,7 +105,7 @@ def render_a4(entries, dpi=300):
         y = draw_text_block(draw, x, y, "업체명", wrap_text(e.get("company_name")), h2_font, body_font)
         y = draw_text_block(draw, x, y, "주문시 사용하는 주문자명", wrap_text(e.get("order_name")), h2_font, body_font)
         y = draw_text_block(draw, x, y, "전화번호", wrap_text(e.get("phone")), h2_font, body_font)
-        y = draw_text_block(draw, x, y, "신고완료된 업체명", wrap_text(e.get("reported_company")), h2_font, body_font)
+        y = draw_text_block(draw, x, y, "업체 판매처 URL", wrap_text(e.get("store_url")), h2_font, body_font)
 
         # 카드 구분선
         y += 20
@@ -109,8 +113,18 @@ def render_a4(entries, dpi=300):
         y += 30
 
         # 한 장에 넘칠 것 같으면 중단
-        if y > A4_H - (MARGIN + 100):
+        if y > A4_H - (MARGIN + 200):
             break
+
+    # 신고완료업체 섹션 추가
+    if st.session_state.reported_companies:
+        y += 50
+        draw.text((x, y), "신고완료된 업체", font=h2_font, fill=(0,0,0))
+        y += h2_font.size + 20
+        
+        for i, company in enumerate(st.session_state.reported_companies, 1):
+            draw.text((x, y), f"{i}. {company}", font=body_font, fill=(0,0,0))
+            y += body_font.size + 10
 
     return img
 
@@ -137,6 +151,8 @@ st.caption("입력 → A4 이미지(PNG/PDF) 생성 → 카톡으로 끌어다�
 # 세션 스토리지
 if "entries" not in st.session_state:
     st.session_state.entries = []
+if "reported_companies" not in st.session_state:
+    st.session_state.reported_companies = []
 
 # 입력 폼
 with st.form("entry_form", clear_on_submit=True):
@@ -147,7 +163,7 @@ with st.form("entry_form", clear_on_submit=True):
     order_name = col1.text_input("주문시 사용하는 주문자명", placeholder="예: 홍길동")
     phone = col2.text_input("전화번호", placeholder="010-0000-0000")
     
-    reported_company = st.text_input("신고완료된 업체명", placeholder="예: ㈜신고완료업체")
+    store_url = st.text_input("업체 판매처 URL", placeholder="https://...")
 
     submitted = st.form_submit_button("추가 (최대 20건)")
     if submitted:
@@ -159,7 +175,7 @@ with st.form("entry_form", clear_on_submit=True):
                 "company_name": company_name,
                 "order_name": order_name,
                 "phone": phone,
-                "reported_company": reported_company,
+                "store_url": store_url,
             })
             st.success("추가 완료!")
 
@@ -167,7 +183,7 @@ with st.form("entry_form", clear_on_submit=True):
 st.subheader(f"입력 리스트 ({len(st.session_state.entries)}/{MAX_ITEMS})")
 if st.session_state.entries:
     df = pd.DataFrame(st.session_state.entries, columns=[
-        "using_company","company_name","order_name","phone","reported_company"
+        "using_company","company_name","order_name","phone","store_url"
     ])
     st.dataframe(df, use_container_width=True)
 
@@ -180,6 +196,34 @@ if st.session_state.entries:
         if st.button("모두 비우기"):
             st.session_state.entries.clear()
             st.rerun()
+
+# 신고완료업체 별도 입력 섹션
+st.markdown("---")
+st.subheader("신고완료된 업체명 입력")
+
+with st.form("reported_form", clear_on_submit=True):
+    reported_company = st.text_input("신고완료된 업체명", placeholder="예: ㈜신고완료업체")
+    submitted_reported = st.form_submit_button("신고완료업체 추가")
+    
+    if submitted_reported and reported_company:
+        st.session_state.reported_companies.append(reported_company)
+        st.success("신고완료업체 추가 완료!")
+
+# 신고완료업체 리스트 표시
+if st.session_state.reported_companies:
+    st.subheader(f"신고완료업체 리스트 ({len(st.session_state.reported_companies)}건)")
+    for i, company in enumerate(st.session_state.reported_companies, 1):
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.write(f"{i}. {company}")
+        with col2:
+            if st.button("삭제", key=f"del_reported_{i}"):
+                st.session_state.reported_companies.pop(i-1)
+                st.rerun()
+    
+    if st.button("신고완료업체 모두 삭제"):
+        st.session_state.reported_companies.clear()
+        st.rerun()
 
 # 이미지 생성
 st.markdown("---")
@@ -249,7 +293,13 @@ if st.session_state.entries:
         lines.append(f"#{i} [{e.get('company_name','-')}]")
         lines.append(f" - 이용업체: {e.get('using_company','-')}")
         lines.append(f" - 주문자명: {e.get('order_name','-')}, 연락처: {e.get('phone','-')}")
-        lines.append(f" - 신고완료업체: {e.get('reported_company','-')}")
+        lines.append(f" - URL: {e.get('store_url','-')}")
+    
+    # 신고완료업체 추가
+    if st.session_state.reported_companies:
+        lines.append("\n[신고완료된 업체]")
+        for i, company in enumerate(st.session_state.reported_companies, 1):
+            lines.append(f"{i}. {company}")
     msg = "\n".join(lines)
     st.code(msg, language="text")
 else:
