@@ -164,11 +164,11 @@ if st.session_state.entries:
     with c1:
         if st.button("마지막 항목 삭제"):
             st.session_state.entries.pop()
-            st.experimental_rerun()
+            st.rerun()
     with c2:
         if st.button("모두 비우기"):
             st.session_state.entries.clear()
-            st.experimental_rerun()
+            st.rerun()
 
 # 이미지 생성
 st.markdown("---")
