@@ -1,0 +1,16 @@
+# Git 명령어 가이드 (Git 설치 후 실행)
+
+# 1. Git 설정 (최초 1회만)
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# 2. 파일 추가 및 커밋
+git add .
+git commit -m "Initial commit: Kakao notice app"
+
+# 3. GitHub 저장소 연결 (GitHub에서 생성한 저장소 URL로 변경)
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
+
+# 4. 메인 브랜치로 설정 및 푸시
+git branch -M main
+git push -u origin main
